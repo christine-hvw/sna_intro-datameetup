@@ -24,6 +24,7 @@ library(knitr)
 library(tidygraph)
 library(ggraph)
 library(igraph)
+library(readxl)
 library(visNetwork)
 
 ```
@@ -38,7 +39,7 @@ In network analysis, researchers can be interested in the **position of specific
 
 ```{r connectdots_gif, out.width="60%"}
 
-knitr::include_graphics("connect_simpsons.gif")
+knitr::include_graphics(here("images", "connect_simpsons.gif"))
 ```
 
 # Network Analysis in ***R***   
@@ -160,7 +161,7 @@ As described above, we need a node and an edge set to do network analysis in R. 
 
 ```{r netdata_meme, out.width="30%"}
 
-knitr::include_graphics("data_hard.jpg")
+knitr::include_graphics(here("images", "data_hard.jpg"))
 ```
 
 Instead, networks are mostly displayed as different kinds of matrices. How these relate to one another can be confusing and is something we don't usually have to deal with in standard quant research. There are three types of matrices that can be used to describe a network and 'translating' them into the desired format varies by type.    
@@ -223,45 +224,35 @@ elist_to_net
 
 # Real-life Application: Co-authorship Networks   
 
-```{r socpub_edgeset}
-readRDS("socpub_edgeset.RDS")
+```{r socpub_data, echo=TRUE, message=FALSE}
+soc_inc <- readRDS(here("data", "socpub_bipart.RDS"))
+rownames(soc_inc)[1:3]
+colnames(soc_inc)[1:3]
 
-mat <- soc_pub.bipartite.edges %*% t(soc_pub.bipartite.edges) # inc. matrix x transponse(inc. matrix) = adj. matrix
+soc_adj <- soc_inc %*% t(soc_inc) #  inc. matrix x transponse(inc. matrix) = adj. matrix
+rownames(soc_adj)[1:3]
+colnames(soc_adj)[1:3]
 
-soc_adj <- as_tbl_graph(mat, directed = FALSE)
+soc_1mode <- as_tbl_graph(soc_adj, directed = FALSE)
+soc_1mode
 
-soc_elist <- as_tbl_graph(soc_pub.bipartite.edges, directed = FALSE)
+#soc_2mode <- as_tbl_graph(socpub_inc, directed = FALSE)
+#soc_2mode
 
+# read in author attributes and add to graph
+auth_att <- as.data.frame(read_excel(here("data", "auth_attributes.xlsx")))
+auth_att <- auth_att %>%
+  mutate(socium = if_else(is.na(dep_cat), 0, 1)) # indicator for socium member
+
+soc_attr <- soc_1mode %>% 
+  activate(nodes) %>% 
+  left_join(auth_att)
+
+soc_attr %N>% # shortcut for activate(nodes), %E>% for edges
+  as_tibble
 ```
 
-```{r socpub_prep, echo=TRUE}
-soc_pub <- as.data.frame(read_excel("soc_pub_all-sci.xlsx"))
-head(soc_pub, 6)
 
-soc_pub.coauth <- sapply(as.character(soc_pub$author), strsplit, "; ") %>% 
-  lapply(trimws)
-
-soc_pub.coauth.unique <- unique(unlist(soc_pub.coauth))[order(unique(unlist(soc_pub.coauth)))]
-
-#---Creating Edge Set----
-
-soc_pub.bipartite.edges <- lapply(soc_pub.coauth, function(x) {soc_pub.coauth.unique %in% x})
-
-soc_pub.bipartite.edges <- do.call("cbind", soc_pub.bipartite.edges) # dimension is number of authors x number of papers
-
-rownames(soc_pub.bipartite.edges) <- soc_pub.coauth.unique
-
-colnames(soc_pub.bipartite.edges) <- paste(soc_pub$title, soc_pub$year, sep = "; ")
-  
-mat <- soc_pub.bipartite.edges %*% t(soc_pub.bipartite.edges)
-
-soc_pub.bipartite.edges <- soc_pub.bipartite.edges * 1 # convert logical to numeric for tbl_graph
-
-saveRDS(soc_pub.bipartite.edges, file = "socpub_edgeset.RDS")  
-
-soc_elist <- as_tbl_graph(soc_pub.bipartite.edges, directed = FALSE)
-
-```
 
 # Resources   
 
