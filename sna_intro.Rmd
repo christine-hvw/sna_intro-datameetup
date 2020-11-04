@@ -1,0 +1,286 @@
+---
+title: "Introduction to Network Analysis in R"
+subtitle: "Data Meet-up CorrelAidX Bremen"
+author: "Christine Hedde - von Westernhagen"
+date: "04.11.2020"
+output: 
+  rmdformats::material:
+    thumbnails: false
+    highlight: "pygments"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      fig.align = "center",
+                      fig.width = 6,
+                      fig.height = 4,
+                      dev = "png",
+                      cache = FALSE,
+                      fig.path = "figs/")
+
+library(here)
+library(tidyverse)
+library(knitr)
+library(tidygraph)
+library(ggraph)
+library(igraph)
+library(visNetwork)
+
+```
+
+# Some Basics of Network Analysis    
+
+Network analysis is all about connections (surprise). What sets network analytic approaches apart form 'standard' quantitative research is really the inherent **inter-dependence** of the data. Meaning, observations only exist BECAUSE they are connected. For example, multi-national trade relations require at least two countries to trade goods. Otherwise we can not observe the phenomenon.    
+
+In network terms, each country in the trade example would be called a **node** (or vertex, pl. vertices) and the trade through which the are connected would be an **edge** (or tie). Nodes and edges can have additional features, as we will see below.   
+
+In network analysis, researchers can be interested in the **position of specific nodes** or in the **overall network structure**. There are several quantitative measures you can calculate for this, some of which are introduced below. The network measures can then be both explanatory or dependent variables, depending on your research question.    
+
+```{r connectdots_gif, out.width="60%"}
+
+knitr::include_graphics("connect_simpsons.gif")
+```
+
+# Network Analysis in ***R***   
+
+There are several packages for network analysis in R:   
+
+- *igraph* (most popular, syntax rather cryptic, incl. plotting functions)    
+- *network* (largely overlaps with igraph, syntax is more straight-forward, part of the 'statnet family')    
+- *tidygraph* (builds on igraph and includes most of its functionality, tidy syntax, no plotting functions)    
+- *ggraph* (for plotting, syntax like ggplot, mostly used together with tidygraph)   
+- *visNetwork*, *threejs*, *networkD3*, *ndtv-d3* (interactive plotting, order ascending in complexity)   
+
+This tutorial will only feature `tidygraph`, `ggraph`, and `visNetwork`. See the *Resources* section for more great material, also for the other packages.   
+
+## Contents of Networks & Basic Graphs    
+
+That networks consist of two types of data (nodes and edges) is also visible in network objects in R. In `tidygraph`, these objects are named `tbl_graph`. Let's construct one of those with some example **node and edge data**.
+
+```{r expl_data, echo=TRUE, message=FALSE}
+
+node_list <- tibble(id = c(1:5))
+
+edge_list <- tibble(from = c(1,1,1,2,3,3,3,4,5,5,5), to = c(2,2,3,4,2,4,5,5,2,2,2)) %>%
+  group_by(from, to) %>%
+  summarise(weight = n())
+
+undir_net <- tbl_graph(nodes = node_list, edges = edge_list, directed = FALSE, node_key = "id")
+undir_net
+
+```
+The minimum content of node data is an identifier variable (here `id`). The identifier has to appear in the edge data as well. There it indicates which nodes are connected to one another (here `from` and `to`). I already added a **weight** to the edges. This is simply a count of how many connections are between a pair of nodes. The resulting graph is **undirected** (`directed = FALSE`), which can be translated as a 'mutual relationship'.   
+
+We can now plot this object with `ggraph`, which basically works like `ggplot2` with some network specific features. The `layout` option defines the algorithm that is responsible for how the nodes and edges are positioned to one another. The layouts available are the same as in the `igraph` function `layout_with_*`. 'kk' stands for Kamada-Kawai, a very common layout algorithm that distributes nodes equally in space.    
+
+```{r ud_uw_na, fig.cap="Undirected, unweighted graph without attributes", echo=TRUE, out.extra='style="width:50%;"'}
+
+pal <- viridis::viridis(n = 6, begin = .3, end = .75) # define color palette for plotting
+
+# undirected, unweighted, no attributes  
+ggraph(undir_net, layout = "kk") + 
+  geom_edge_link() + 
+  geom_node_point(size = 10, colour = pal[1]) +
+  geom_node_text(aes(label = id), 
+                 colour = "white", vjust = 0.4) + 
+  theme_graph() # theme without axes, gridlines etc.
+```
+
+By setting `directed = TRUE` the edges in the graph are now **directed** towards some nodes. Some real-world examples are cash or trade flows, social media communication, or non-mutual friendship 😢    
+
+```{r d_uw_na, fig.cap="Directed, unweighted graph without attributes", echo=TRUE, fig.align='center', out.extra='style="width:50%;"'}
+
+dir_net <- tbl_graph(nodes = node_list, edges = edge_list, directed = TRUE, node_key = "id")
+
+ggraph(dir_net, layout = "kk") + 
+  geom_edge_link(arrow = arrow(angle = 15, type = "closed", length = unit(4, "mm")), 
+                 end_cap = circle(4, "mm")) + # so arrows don't overlap nodes 
+  geom_node_point(size = 10, colour = pal[1]) + 
+  geom_node_text(aes(label = id), 
+                 colour = "white", vjust = 0.4) + 
+  theme_graph()
+```
+We can also visualise the weight of the edges to show how 'strong' certain ties are, using the `width` argument.    
+
+```{r ud_w_na, fig.cap="Undirected, weighted graph without attributes", echo=TRUE, fig.align='center', out.extra='style="width:50%;"'}
+
+# undirected, weighted, no attributes
+ggraph(undir_net, layout = "kk") + 
+  geom_edge_link(aes(width = weight), 
+                 alpha = 0.7) + 
+  geom_node_point(size = 10, colour = pal[1]) +
+  geom_node_text(aes(label = id), 
+                 colour = "white", vjust = 0.4) +
+  theme_graph(base_family="sans") # provide font family, otherwise can't render document (Windows)
+
+```
+We are often interested in certain **attributes** of nodes or edges. To add some to the example data, `tidygraph` needs to know which data we want to alter (nodes or edges). Therefore, the package contains the `activate` function. Then, we can manipulate data with all the `dplyr` verbs we know and (mostly) love.    
+
+```{r d_uw_a, fig.cap="Undirected, unweighted graph with attributes", echo=TRUE, fig.align='center', out.extra='style="width:50%;"'}
+
+# undirected, unweighted, with attributes
+undir_net.att <- undir_net %>%
+  activate(nodes) %>%
+  mutate(Preference = rep(c("Python", "R"), c(3, 2))) %>%
+  activate(edges) %>% 
+  mutate(Relationship = sample(c("Friends", "Foes"), 8, replace = TRUE))
+
+ggraph(undir_net.att, layout = "kk") + 
+  geom_edge_link(aes(label = Relationship), 
+                 angle_calc = "along", label_dodge = unit(2.5, "mm"), label_push = unit(10, "mm"),
+                 alpha = 0.7) + 
+  geom_node_point(aes(colour = Preference),
+                  size = 10) +
+  scale_color_manual(values = pal[c(6,1)]) +
+  geom_node_text(aes(label = id), 
+                 colour = "white", vjust = 0.4) + 
+  theme_graph(base_family="sans") # provide font family, otherwise can't render document (Windows)
+
+```
+The concept of attributes can be pushed further: we can say that nodes are of different *types*. This results in **bipartite** (or two-mode) networks, where nodes of the same type are not directly connected to one another, but only through the nodes of the other type. This could be employees in firms or authors of research papers, for example.   
+
+```{r bipart, fig.cap = "Bi-partite graph", echo=TRUE, fig.align='center', out.extra='style="width:50%;"'}
+
+bipart_net <- play_bipartite(8, 2, p=0.8, directed = FALSE) %>% # play_* generates different types of networks
+  activate(nodes) %>%
+  mutate("Node.type" = as.character(if_else(type==TRUE, "Firm", "Employee")))
+
+ggraph(bipart_net, layout = "stress") +
+  geom_edge_link() +
+  geom_node_point(aes(shape = Node.type , color = Node.type), 
+                  size = 6) + 
+  scale_color_manual(values = pal[c(1,6)]) +
+  theme_graph(base_family="sans") # provide font family, otherwise can't render document (Windows)
+
+```
+
+# Network Data in the Wild: The Matrix Trilogy     
+
+As described above, we need a node and an edge set to do network analysis in R. However, life out there seldom provides us with data in this specific format. This is contrary to, e.g., survey data that is already in a ready-to-use format (apart from some variable recoding etc.).    
+
+```{r netdata_meme, out.width="30%"}
+
+knitr::include_graphics("data_hard.jpg")
+```
+
+Instead, networks are mostly displayed as different kinds of matrices. How these relate to one another can be confusing and is something we don't usually have to deal with in standard quant research. There are three types of matrices that can be used to describe a network and 'translating' them into the desired format varies by type.    
+
+## Adjacency Matrix (aka. Sociomatrix)    
+
+An adjacency matrix is basically a cross-table of the same elements (and is therefore square), mostly the nodes. The cell values can be restricted to 0/1 to indicate whether there are any connections between the elements or a count of the connections.    
+
+```{r adj_mat, echo=TRUE}
+adj_mat <- matrix(sample(0:3, 16, replace = TRUE), nrow = 4)
+
+colnames(adj_mat) <- rownames(adj_mat) <- LETTERS[1:4]
+
+adj_mat
+```
+
+`tidygraph` can create `tbl_graph` objects from a variety of data formats, also adjacency matrices. 
+
+```{r adj_to_net, echo=TRUE}
+adj_to_net <- as_tbl_graph(adj_mat, directed = FALSE)
+adj_to_net
+```
+
+## Incidence Matrix    
+
+An incidence matrix in contrast, is a cross-table of different elements, e.g. nodes and edges or different types of nodes as in a bipartite graph.   
+
+```{r inc_mat, echo=TRUE}
+inc_mat <- matrix(sample(0:3, 12, replace = TRUE), nrow = 3)
+
+rownames(inc_mat) <- LETTERS[1:3]
+colnames(inc_mat) <- letters[1:4]
+
+inc_mat
+```
+
+Converting the incidence matrix to a network results in this:   
+
+```{r inc_to_net, echo=TRUE}
+inc_to_net <- as_tbl_graph(inc_mat, directed = FALSE)
+inc_to_net
+```
+
+The `type` variable is a logical that denotes the node-type in a bipartite network.   
+
+## Edgelist    
+
+We already know this format and it's just a matrix in disguise. It consists of two columns with labels/names of elements that are connected to one another, and sometimes a weight column. It's actually just the edgelist as in the example network before, yay!    
+
+```{r elist, echo=TRUE}
+edge_list
+```
+
+An edgelist is sufficient to create a network, but often we have some additional data with node attributes.  
+
+```{r elist_to_net, echo=TRUE}
+elist_to_net <- as_tbl_graph(edge_list, directed = FALSE)
+elist_to_net
+```
+
+# Real-life Application: Co-authorship Networks   
+
+```{r socpub_edgeset}
+readRDS("socpub_edgeset.RDS")
+
+mat <- soc_pub.bipartite.edges %*% t(soc_pub.bipartite.edges) # inc. matrix x transponse(inc. matrix) = adj. matrix
+
+soc_adj <- as_tbl_graph(mat, directed = FALSE)
+
+soc_elist <- as_tbl_graph(soc_pub.bipartite.edges, directed = FALSE)
+
+```
+
+```{r socpub_prep, echo=TRUE}
+soc_pub <- as.data.frame(read_excel("soc_pub_all-sci.xlsx"))
+head(soc_pub, 6)
+
+soc_pub.coauth <- sapply(as.character(soc_pub$author), strsplit, "; ") %>% 
+  lapply(trimws)
+
+soc_pub.coauth.unique <- unique(unlist(soc_pub.coauth))[order(unique(unlist(soc_pub.coauth)))]
+
+#---Creating Edge Set----
+
+soc_pub.bipartite.edges <- lapply(soc_pub.coauth, function(x) {soc_pub.coauth.unique %in% x})
+
+soc_pub.bipartite.edges <- do.call("cbind", soc_pub.bipartite.edges) # dimension is number of authors x number of papers
+
+rownames(soc_pub.bipartite.edges) <- soc_pub.coauth.unique
+
+colnames(soc_pub.bipartite.edges) <- paste(soc_pub$title, soc_pub$year, sep = "; ")
+  
+mat <- soc_pub.bipartite.edges %*% t(soc_pub.bipartite.edges)
+
+soc_pub.bipartite.edges <- soc_pub.bipartite.edges * 1 # convert logical to numeric for tbl_graph
+
+saveRDS(soc_pub.bipartite.edges, file = "socpub_edgeset.RDS")  
+
+soc_elist <- as_tbl_graph(soc_pub.bipartite.edges, directed = FALSE)
+
+```
+
+# Resources   
+
+- Great intro using different packages, good example of how to create/manipulate node and edge sets:    
+https://www.jessesadler.com/post/network-analysis-with-r/   
+
+- Intro to `tidygraph` by the creator Mr. Thomas Lin Pedersen himself:    
+https://www.data-imaginist.com/2017/introducing-tidygraph/    
+
+- Extensive overview of visualisation possibilities, also for interactive plots:    
+https://kateto.net/network-visualization    
+
+- An application of `tidygraph` an `ggraph` with *Game of Thrones* data:    
+https://www.shirin-glander.de/2018/03/got_network/
+
+
+
+
+
+
+
+
