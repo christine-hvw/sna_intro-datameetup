@@ -7,6 +7,8 @@ output:
   rmdformats::material:
     thumbnails: false
     highlight: "pygments"
+editor_options: 
+  chunk_output_type: inline
 ---
 
 ```{r setup, include=FALSE}
@@ -23,7 +25,6 @@ library(tidyverse)
 library(knitr)
 library(tidygraph)
 library(ggraph)
-library(igraph)
 library(readxl)
 library(visNetwork)
 
@@ -89,7 +90,7 @@ ggraph(undir_net, layout = "kk") +
 
 By setting `directed = TRUE` the edges in the graph are now **directed** towards some nodes. Some real-world examples are cash or trade flows, social media communication, or non-mutual friendship 😢    
 
-```{r d_uw_na, fig.cap="Directed, unweighted graph without attributes", echo=TRUE, fig.align='center', out.extra='style="width:50%;"'}
+```{r d_uw_na, fig.cap="Directed, unweighted graph without attributes", echo=TRUE, out.extra='style="width:50%;"'}
 
 dir_net <- tbl_graph(nodes = node_list, edges = edge_list, directed = TRUE, node_key = "id")
 
@@ -224,8 +225,10 @@ elist_to_net
 
 # Real-life Application: Co-authorship Networks   
 
+For a term paper I downloaded publication lists from SOCIUM-website. After bringing them into a reasonable format, that is an incidence matrix where authors are connected to publications (bipartite network), I turned it into an adjacency matrix connecting authors to one another (this is the only matrix algebra I know). I then added some author attributes like department membership, department position, or gender.   
+
 ```{r socpub_data, echo=TRUE, message=FALSE}
-soc_inc <- readRDS(here("data", "socpub_bipart.RDS"))
+soc_inc <- readRDS(here("data", "socpub_bipart.RDS")) # incidence matrix with authors as rows, publications as cols
 rownames(soc_inc)[1:3]
 colnames(soc_inc)[1:3]
 
@@ -251,7 +254,79 @@ soc_attr <- soc_1mode %>%
 soc_attr %N>% # shortcut for activate(nodes), %E>% for edges
   as_tibble
 ```
+## Centrality Measures    
 
+```{r compute_measures, echo=TRUE}
+
+soc_meas <- 
+  soc_attr %N>% 
+  mutate(degree = centrality_degree(),
+         betweenness = round(centrality_betweenness(), 2),
+         eigen = round(centrality_eigen(), 2))
+
+soc_meas %N>%
+  arrange(desc(degree)) %>% 
+  select(name, degree) %>%
+  as_tibble() %>% 
+  head(10)
+
+soc_meas %N>%
+  arrange(desc(betweenness)) %>% 
+  select(name, betweenness) %>%
+  as_tibble() %>% 
+  head(10)
+
+soc_meas %N>%
+  arrange(desc(eigen)) %>% 
+  select(name, eigen) %>%
+  as_tibble() %>% 
+  head(10)
+```
+
+```{r soc_plot, echo=TRUE,  out.extra='style="width:auto;"'}
+soc_sub <- 
+  soc_meas %>%
+  filter(socium == 1)
+
+ggraph(soc_sub, layout = "fr") +
+  geom_edge_link() +
+  geom_node_point(aes(color = as.factor(dep_cat))) +
+  theme_graph(base_family="sans")
+
+ggraph(soc_sub, layout = "fr") +
+  geom_edge_link() +
+  geom_node_point(aes(color = as.factor(dep_cat), size = degree)) +
+  geom_node_text(aes(filter = degree>=50, label =  name), 
+                 size = 3, repel = TRUE) +
+  theme_graph(base_family="sans")
+
+ggraph(soc_sub, layout = "fr") +
+  geom_edge_link() +
+  geom_node_point(aes(color = as.factor(dep_cat), size = betweenness)) +  
+  geom_node_text(aes(filter = betweenness>=50000, label =  name), 
+                 size = 3, repel = TRUE) +
+  theme_graph(base_family="sans")
+
+ggraph(soc_sub, layout = "fr") +
+  geom_edge_link() +
+  geom_node_point(aes(color = as.factor(dep_cat), size = eigen)) +
+  geom_node_text(aes(filter = eigen>=0.1, label =  name), 
+                 size = 3, repel = TRUE) +
+  theme_graph(base_family="sans")
+```
+
+## visNetwork   
+
+```{r visnetwork, echo=TRUE,  out.extra='style="width:auto;"'}
+node_df <- soc_sub %N>% 
+  mutate(id = c(1:240)) %>% 
+  rename(label = name) %>% 
+  as.data.frame() 
+
+edge_df <- soc_sub %E>% as.data.frame() 
+
+visNetwork(node_df, edge_df)
+```
 
 
 # Resources   
@@ -266,9 +341,10 @@ https://www.data-imaginist.com/2017/introducing-tidygraph/
 https://kateto.net/network-visualization    
 
 - An application of `tidygraph` an `ggraph` with *Game of Thrones* data:    
-https://www.shirin-glander.de/2018/03/got_network/
+https://www.shirin-glander.de/2018/03/got_network/    
 
-
+- Extensive `ggraph` intro:   
+http://mr.schochastics.net/netVizR.html
 
 
 
