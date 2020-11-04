@@ -7,8 +7,6 @@ output:
   rmdformats::material:
     thumbnails: false
     highlight: "pygments"
-editor_options: 
-  chunk_output_type: inline
 ---
 
 ```{r setup, include=FALSE}
