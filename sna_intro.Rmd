@@ -20,6 +20,7 @@ knitr::opts_chunk$set(echo = FALSE,
 
 library(here)
 library(tidyverse)
+library(magrittr)
 library(knitr)
 library(tidygraph)
 library(ggraph)
@@ -163,7 +164,7 @@ As described above, we need a node and an edge set to do network analysis in R. 
 knitr::include_graphics(here("images", "data_hard.jpg"))
 ```
 
-Instead, networks are mostly displayed as different kinds of matrices. How these relate to one another can be confusing and is something we don't usually have to deal with in standard quant research. There are three types of matrices that can be used to describe a network and 'translating' them into the desired format varies by type. Often your data isn't even a matrix yet. In that case you first have to figure out in which of the following formats you can/should transform it.   
+Instead, networks are mostly displayed as different kinds of matrices. How these relate to one another can be confusing and is something we don't usually have to deal with in standard quant research. There are three types of matrices that can be used to describe a network and 'translating' them into the desired format varies by type. Often your data isn't even a matrix yet. In that case, you first have to figure out to which of the following formats you can/should transform it.   
 
 ## Adjacency Matrix (aka. Sociomatrix)    
 
@@ -222,7 +223,7 @@ An edgelist is sufficient to create a network, but often we have some additional
 
 # Real-life Application: Co-authorship Networks   
 
-For a term paper, I downloaded publication lists of the [SOCIUM research centre][https://www.socium.uni-bremen.de/home/en/?]. After bringing them into a reasonable format - that is an incidence matrix where authors are connected to publications (bipartite network) - I turned everything into an adjacency matrix connecting authors to one another (this is the only matrix algebra I know). I then added some author attributes like department membership, department position, or gender.   
+For a term paper, I downloaded publication lists of the [SOCIUM research centre](https://www.socium.uni-bremen.de/home/en/?). After bringing them into a reasonable format - that is an incidence matrix where authors are connected to publications (bipartite network) - I turned everything into an adjacency matrix connecting authors to one another (this is the only matrix algebra I know). I then added some author attributes like department membership, department position, or gender.   
 
 ```{r socpub_data, echo=TRUE, message=FALSE}
 soc_inc <- readRDS(here("data", "socpub_bipart.RDS")) # incidence matrix with authors as rows, publications as cols
@@ -253,7 +254,9 @@ soc_attr %N>% # shortcut for activate(nodes), %E>% for edges
 ```
 ## Centrality Measures    
 
-```{r compute_measures, echo=TRUE}
+### Degree Cnetrality   
+
+```{r degree, echo=TRUE}
 
 soc_meas <- 
   soc_attr %N>% 
@@ -266,12 +269,22 @@ soc_meas %N>%
   select(name, degree) %>%
   as_tibble() %>% 
   head(10)
+```
+
+### Betweenness Centrality    
+
+```{r betweenness, echo=TRUE}
 
 soc_meas %N>%
   arrange(desc(betweenness)) %>% 
   select(name, betweenness) %>%
   as_tibble() %>% 
   head(10)
+```
+
+### Eigenvector Centrality    
+
+```{r eigenvector, echo=TRUE}
 
 soc_meas %N>%
   arrange(desc(eigen)) %>% 
@@ -279,6 +292,8 @@ soc_meas %N>%
   as_tibble() %>% 
   head(10)
 ```
+
+## Static Plotting with `ggraph`   
 
 ```{r soc_plot, echo=TRUE,  out.extra='style="width:auto;"'}
 soc_sub <- 
@@ -312,7 +327,7 @@ ggraph(soc_sub, layout = "fr") +
   theme_graph(base_family="sans")
 ```
 
-## visNetwork   
+## Interactive Plotting with `visNetwork`      
 
 ```{r visnetwork, echo=TRUE,  out.extra='style="width:auto;"'}
 node_df <- soc_sub %N>% 
