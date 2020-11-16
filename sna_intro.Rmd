@@ -223,7 +223,7 @@ An edgelist is sufficient to create a network, but often we have some additional
 
 # Real-life Application: Co-authorship Networks   
 
-For a term paper, I downloaded publication lists of the [SOCIUM research centre](https://www.socium.uni-bremen.de/home/en/?). After bringing them into a reasonable format - that is an incidence matrix where authors are connected to publications (bipartite network) - I turned everything into an adjacency matrix connecting authors to one another (this is the only matrix algebra I know). I then added some author attributes like department membership, department position, or gender.   
+For a term paper, I downloaded publication lists of the [SOCIUM research centre](https://www.socium.uni-bremen.de/home/en/?). After bringing them into a reasonable format - that is an incidence matrix where authors are connected to publications (bipartite network) - I turned everything into an adjacency matrix connecting authors to one another (this is the only matrix algebra I know). I then added some author attributes like department membership, department position, and gender.   
 
 ```{r socpub_data, echo=TRUE, message=FALSE}
 soc_inc <- readRDS(here("data", "socpub_bipart.RDS")) # incidence matrix with authors as rows, publications as cols
@@ -237,7 +237,7 @@ colnames(soc_adj)[1:3]
 soc_1mode <- as_tbl_graph(soc_adj, directed = FALSE)
 soc_1mode
 
-#soc_2mode <- as_tbl_graph(socpub_inc, directed = FALSE)
+#soc_2mode <- as_tbl_graph(socpub_inc, directed = FALSE) # this would give the bipartite/two-mode network
 #soc_2mode
 
 # read in author attributes and add to graph
@@ -254,17 +254,23 @@ soc_attr %N>% # shortcut for activate(nodes), %E>% for edges
 ```
 ## Centrality Measures    
 
-### Degree Cnetrality   
+Centrality measures can be calculated to identify the "importance" of an actor within a network. As importance can be defined in various ways, there are also different types of centrality (31 of which are built into `tidygraph`). I will introduce only the four most widely used measures here: *degree*, *betwenness*, *eigenvector*, and *closeness* centrality.    
+
+### Degree Centrality   
+
+Degree centrality simply counts the edges a node has. In directed networks, you can also specify whether you want to look at the in- or out-degree. In the co-authorship network, the most central actor is the one with the most co-authors (multiple ties are allowed).    
 
 ```{r degree, echo=TRUE}
-
+# add cent. measures to nodes 
 soc_meas <- 
   soc_attr %N>% 
-  mutate(degree = centrality_degree(),
-         betweenness = round(centrality_betweenness(), 2),
-         eigen = round(centrality_eigen(), 2))
+  mutate(degree = centrality_degree(),                       
+         betweenness = round(centrality_betweenness(weights = NULL), 2),
+         eigen = round(centrality_eigen(), 2),
+         closeness = centrality_closeness())
 
-soc_meas %N>%
+# show name and value of top 10 nodes
+soc_meas %N>%              
   arrange(desc(degree)) %>% 
   select(name, degree) %>%
   as_tibble() %>% 
@@ -272,6 +278,8 @@ soc_meas %N>%
 ```
 
 ### Betweenness Centrality    
+
+Betweenness centrality counts the shortest paths that go through a node. A path is any series of connected (adjacent) nodes, and it is shorter the fewer nodes have to be passed through. If many shortest paths go through a node, it is an important actor for the efficiency of the network. A node with high betweenness centrality can also be interpreted as a bridging actor, working like a hub through which other nodes are connected.    
 
 ```{r betweenness, echo=TRUE}
 
@@ -282,7 +290,43 @@ soc_meas %N>%
   head(10)
 ```
 
+### Closeness Centrality    
+
+Closeness Centrality also includes the shortest paths. It is the inverse of the average distance (defined as shortest path) between a node and all other nodes.    
+
+```{r closeness, echo=TRUE}
+
+soc_meas %N>%
+  arrange(desc(closeness)) %>% 
+  select(name, closeness) %>%
+  as_tibble() %>% 
+  head(10)
+```
+
+If a network is largely disconnected (it is split into multiple *components* or even *isolates*), it doesn't really make sense to calculate closeness centrality. Therefore, I redefine it only for the largest component:   
+
+```{r larg_comp, echo=TRUE, message=FALSE}
+
+larg_comp <- 
+  soc_meas %N>% 
+  mutate(component = group_components() %>% 
+           factor()) %>%
+  group_by(component) %>%
+  mutate(comp_size = n()) %>%  
+  ungroup() %>% 
+  filter(comp_size == max(comp_size)) %>% 
+  mutate(closeness = centrality_closeness()) 
+
+larg_comp %N>%
+  arrange(desc(closeness)) %>% 
+  select(name, closeness) %>%
+  as_tibble() %>% 
+  head(10)
+```
+
 ### Eigenvector Centrality    
+
+Eigenvector centrality not only looks at how many ties a node (ego) has, but also how many ties its alters have. High eigenvector centrality means being connected to many other well connected nodes.   
 
 ```{r eigenvector, echo=TRUE}
 
@@ -295,35 +339,58 @@ soc_meas %N>%
 
 ## Static Plotting with `ggraph`   
 
+We can now plot the network highlighting the different centrality measures. To increase visibility, the network is reduced to SOCIUM-members.   
+
 ```{r soc_plot, echo=TRUE,  out.extra='style="width:auto;"'}
 soc_sub <- 
   soc_meas %>%
   filter(socium == 1)
 
-ggraph(soc_sub, layout = "fr") +
-  geom_edge_link() +
-  geom_node_point(aes(color = as.factor(dep_cat))) +
-  theme_graph(base_family="sans")
+larg_comp_sub <- 
+  larg_comp %>% 
+  filter(socium == 1)
 
 ggraph(soc_sub, layout = "fr") +
   geom_edge_link() +
-  geom_node_point(aes(color = as.factor(dep_cat), size = degree)) +
-  geom_node_text(aes(filter = degree>=50, label =  name), 
-                 size = 3, repel = TRUE) +
+  geom_node_point(aes(fill = as.factor(dep_cat)), 
+                  shape = 21, size = 2) +
+  labs(fill = "Department") +
   theme_graph(base_family="sans")
 
 ggraph(soc_sub, layout = "fr") +
-  geom_edge_link() +
-  geom_node_point(aes(color = as.factor(dep_cat), size = betweenness)) +  
-  geom_node_text(aes(filter = betweenness>=50000, label =  name), 
-                 size = 3, repel = TRUE) +
+  geom_edge_link(alpha = .7) +
+  geom_node_point(aes(fill = as.factor(dep_cat), size = degree),
+                  shape = 21) +
+  geom_node_label(aes(filter = degree>=50, label =  name), 
+                  vjust = 3, size = 2, alpha = 0.8, label.padding = 0.1, repel = TRUE) +
+  labs(fill = "Department", size = "Degree Centrality") +
   theme_graph(base_family="sans")
 
 ggraph(soc_sub, layout = "fr") +
+  geom_edge_link(alpha = .7) +
+  geom_node_point(aes(fill = as.factor(dep_cat), size = betweenness),
+                  shape = 21) +  
+  geom_node_label(aes(filter = betweenness>=75000, label =  name), 
+                  vjust = 3, size = 2, alpha = 0.8, label.padding = 0.1, repel = TRUE) +
+  labs(fill = "Department", size = "Betweenness Centrality") +
+  theme_graph(base_family="sans")
+
+ggraph(larg_comp_sub, layout = "fr") + # plot only largest component for closeness 
   geom_edge_link() +
-  geom_node_point(aes(color = as.factor(dep_cat), size = eigen)) +
-  geom_node_text(aes(filter = eigen>=0.1, label =  name), 
-                 size = 3, repel = TRUE) +
+  geom_node_point(aes(fill = as.factor(dep_cat), size = (closeness)^2),
+                  shape = 21) +
+  geom_node_label(aes(filter = closeness>0.00026, label =  name), 
+                  vjust = 3, size = 2, alpha = 0.8, label.padding = 0.1, repel = TRUE) +
+  labs(fill = "Department", size = "Closeness Centrality\n(squared)") +
+  theme_graph(base_family="sans")
+
+ggraph(soc_sub, layout = "fr") +
+  geom_edge_link(alpha = .7) +
+  geom_node_point(aes(fill = as.factor(dep_cat), size = eigen),
+                  shape = 21) +
+  geom_node_label(aes(filter = eigen>=0.1, label =  name), 
+                 vjust = 3, size = 2, alpha = 0.8, label.padding = 0.1, repel = TRUE) +
+  labs(fill = "Department", size = "Eigenvector Centrality") +
   theme_graph(base_family="sans")
 ```
 
@@ -347,7 +414,7 @@ visNetwork(node_df, edge_df)
 https://www.jessesadler.com/post/network-analysis-with-r/   
 
 - Intro to `tidygraph` by the creator Mr. Thomas Lin Pedersen himself:    
-https://www.data-imaginist.com/2017/introducing-tidygraph/    
+https://www.data-imaginist.com/2017/introducing-tidygraph/ (reference manual: https://tidygraph.data-imaginist.com/reference/index.html)   
 
 - Extensive overview of visualisation possibilities, also for interactive plots:    
 https://kateto.net/network-visualization    
