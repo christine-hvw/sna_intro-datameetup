@@ -7,8 +7,6 @@ output:
   rmdformats::material:
     thumbnails: false
     highlight: "pygments"
-editor_options: 
-  chunk_output_type: inline
 ---
 
 ```{r setup, include=FALSE}
@@ -245,8 +243,14 @@ soc_1mode
 # read in author attributes and add to graph
 auth_att <- as.data.frame(read_excel(here("data", "auth_attributes.xlsx")))
 auth_att %<>%
-  mutate(socium = if_else(is.na(dep_cat), 0, 1)) # indicator for socium member
-
+  mutate(socium = if_else(is.na(dep_cat), 0, 1)) %>% # indicator for socium member
+  mutate(dep_cat = case_when(dep_cat == 1 ~ "Theory",
+                             dep_cat == 2 ~ "Polit. Economy",
+                             dep_cat == 3 ~ "Ineq. in Welfare Societies",
+                             dep_cat == 4 ~ "Life Course",
+                             dep_cat == 5 ~ "Health"
+                           ))
+  
 soc_attr <- soc_1mode %>% 
   activate(nodes) %>% 
   left_join(auth_att)
@@ -262,7 +266,7 @@ Centrality measures can be calculated to identify the "importance" of an actor w
 
 Degree centrality simply counts the edges a node has. In directed networks, you can also specify whether you want to look at the in- or out-degree. In the co-authorship network, the most central actor is the one with the most co-authors (multiple ties are allowed).    
 
-```{r degree, echo=TRUE, message=FALSE}
+```{r degree, echo=TRUE, message=FALSE, warning=FALSE}
 # add cent. measures to nodes 
 soc_meas <- 
   soc_attr %N>% 
@@ -307,7 +311,7 @@ soc_meas %N>%
 
 If a network is largely disconnected (it is split into multiple *components* or even *isolates*), it doesn't really make sense to calculate closeness centrality. Therefore, I redefine it only for the largest component:   
 
-```{r larg_comp, echo=TRUE, message=FALSE}
+```{r larg_comp, echo=TRUE, message=FALSE, warning=FALSE}
 
 larg_comp <- 
   soc_meas %N>% 
@@ -402,7 +406,7 @@ ggraph(soc_sub, layout = "fr") +
 node_df <- soc_sub %N>% 
   mutate(id = c(1:240)) %>% 
   rename(label = name, group = dep_cat, size = degree) %>% 
-  arrange(group) %>% 
+  arrange(as.factor(group)) %>% 
   as.data.frame() 
 
 edge_df <- soc_sub %E>% 
@@ -411,11 +415,11 @@ edge_df <- soc_sub %E>%
 
 visNetwork(node_df, edge_df, width = "100%", height = "600px") %>% 
   visNodes(shadow = TRUE, font = list(size = 30)) %>% 
-  visGroups(groupname = as.character(1), color = pal[1]) %>% # have to specify groups individually
-  visGroups(groupname = as.character(2), color = pal[3]) %>% 
-  visGroups(groupname = as.character(3), color = pal[4]) %>% 
-  visGroups(groupname = as.character(4), color = pal[5]) %>% 
-  visGroups(groupname = as.character(5), color = pal[6]) %>% 
+  visGroups(groupname = "Theory", color = pal[1]) %>% # have to specify groups individually
+  visGroups(groupname = "Polit. Economy", color = pal[3]) %>% 
+  visGroups(groupname = "Ineq. in Welfare Societies", color = pal[4]) %>% 
+  visGroups(groupname = "Life Course", color = pal[5]) %>% 
+  visGroups(groupname = "Health", color = pal[6]) %>% 
   visIgraphLayout(layout = "layout_with_fr") %>% 
   visLegend(main="Department", position="right", ncol=1) %>% 
   visOptions(selectedBy = "group")
