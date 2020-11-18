@@ -229,10 +229,12 @@ For a term paper, I downloaded publication lists of the [SOCIUM research centre]
 soc_inc <- readRDS(here("data", "socpub_bipart.RDS")) # incidence matrix with authors as rows, publications as cols
 rownames(soc_inc)[1:3]
 colnames(soc_inc)[1:3]
+soc_inc[1:3, 1:3]
 
 soc_adj <- soc_inc %*% t(soc_inc) #  inc. matrix x transponse(inc. matrix) = adj. matrix
 rownames(soc_adj)[1:3]
 colnames(soc_adj)[1:3]
+soc_adj[1:3, 1:3]
 
 soc_1mode <- as_tbl_graph(soc_adj, directed = FALSE)
 soc_1mode
@@ -244,12 +246,14 @@ soc_1mode
 auth_att <- as.data.frame(read_excel(here("data", "auth_attributes.xlsx")))
 auth_att %<>%
   mutate(socium = if_else(is.na(dep_cat), 0, 1)) %>% # indicator for socium member
-  mutate(dep_cat = case_when(dep_cat == 1 ~ "Theory",
+  mutate(dep_cat = case_when(dep_cat == 1 ~ "Theory", # label departments
                              dep_cat == 2 ~ "Polit. Economy",
                              dep_cat == 3 ~ "Ineq. in Welfare Societies",
                              dep_cat == 4 ~ "Life Course",
-                             dep_cat == 5 ~ "Health"
-                           ))
+                             dep_cat == 5 ~ "Health")) %>% 
+  mutate(al = if_else(socium==1 & is.na(al), 0, al),
+         agl = if_else(socium==1 & is.na(agl), 0, agl)) %>% 
+  rename("Head Department" = "al", "Head Working Grp." = "agl")
   
 soc_attr <- soc_1mode %>% 
   activate(nodes) %>% 
@@ -260,18 +264,18 @@ soc_attr %N>% # shortcut for activate(nodes), %E>% for edges
 ```
 ## Centrality Measures    
 
-Centrality measures can be calculated to identify the "importance" of an actor within a network. As importance can be defined in various ways, there are also different types of centrality (31 of which are built into `tidygraph`). I will introduce only the four most widely used measures here: *degree*, *betwenness*, *eigenvector*, and *closeness* centrality.    
+Centrality measures can be calculated to identify the "importance" of an actor within a network. As importance can be defined in various ways, there are also different types of centrality (31 of which are built into `tidygraph`). I will introduce only the four most widely used measures here: **degree**, **betweenness**, **eigenvector**, and **closeness** centrality.    
 
 ### Degree Centrality   
 
-Degree centrality simply counts the edges a node has. In directed networks, you can also specify whether you want to look at the in- or out-degree. In the co-authorship network, the most central actor is the one with the most co-authors (multiple ties are allowed).    
+Degree centrality simply counts the edges attached to a node. In directed networks, you can also specify whether you want to look at the in- or out-degree (edges going to or from a node). In the co-authorship network, the most central actor is the one with the most co-authors (multiple ties are allowed).    
 
 ```{r degree, echo=TRUE, message=FALSE, warning=FALSE}
 # add cent. measures to nodes 
 soc_meas <- 
   soc_attr %N>% 
   mutate(degree = centrality_degree(),                       
-         betweenness = round(centrality_betweenness(weights = NULL), 2),
+         betweenness = round(centrality_betweenness(), 2),
          eigen = round(centrality_eigen(), 2),
          closeness = centrality_closeness())
 
@@ -285,7 +289,7 @@ soc_meas %N>%
 
 ### Betweenness Centrality    
 
-Betweenness centrality counts the shortest paths that go through a node. A path is any series of connected (adjacent) nodes, and it is shorter the fewer nodes have to be passed through. If many shortest paths go through a node, it is an important actor for the efficiency of the network. A node with high betweenness centrality can also be interpreted as a bridging actor, working like a hub through which other nodes are connected.    
+Betweenness centrality counts the shortest paths that go through a node. A path is any series of connected (adjacent) nodes, and it is shorter the fewer nodes have to be passed through. If many shortest paths go through a node, it is an important actor for the transmission efficiency of the network. A node with high betweenness centrality can also be interpreted as a bridging actor, working like a hub through which other nodes are connected.    
 
 ```{r betweenness, echo=TRUE}
 
@@ -298,7 +302,7 @@ soc_meas %N>%
 
 ### Closeness Centrality    
 
-Closeness Centrality also includes the shortest paths. It is the inverse of the average distance (defined as shortest path) between a node and all other nodes.    
+Closeness Centrality also includes the shortest paths. It is the inverse of the average distance (defined as shortest path) between a node and all other nodes. It basically displays how close a node is to all other nodes.    
 
 ```{r closeness, echo=TRUE}
 
@@ -309,7 +313,7 @@ soc_meas %N>%
   head(10)
 ```
 
-If a network is largely disconnected (it is split into multiple *components* or even *isolates*), it doesn't really make sense to calculate closeness centrality. Therefore, I redefine it only for the largest component:   
+If a network is largely disconnected (it is split into multiple **components** or even **isolates**), it doesn't really make sense to calculate closeness centrality because some paths are simply missing. Therefore, I re-define it only for the largest component:   
 
 ```{r larg_comp, echo=TRUE, message=FALSE, warning=FALSE}
 
@@ -329,6 +333,8 @@ larg_comp %N>%
   as_tibble() %>% 
   head(10)
 ```
+
+We can see that even the largest values are still pretty small.   
 
 ### Eigenvector Centrality    
 
@@ -360,43 +366,47 @@ ggraph(soc_sub, layout = "fr") +
   geom_edge_link() +
   geom_node_point(aes(fill = as.factor(dep_cat)), 
                   shape = 21, size = 2) +
-  labs(fill = "Department") +
+  labs(fill = "Department", caption = "Co-authorship network of SOCIUM members.") +
   theme_graph(base_family="sans")
 
 ggraph(soc_sub, layout = "fr") +
   geom_edge_link(alpha = .7) +
   geom_node_point(aes(fill = as.factor(dep_cat), size = degree),
                   shape = 21) +
-  geom_node_label(aes(filter = degree>=50, label =  name), 
+  geom_node_label(aes(filter = degree>quantile(degree, p=.95), label =  name), 
                   vjust = 3, size = 2, alpha = 0.8, label.padding = 0.1, repel = TRUE) +
-  labs(fill = "Department", size = "Degree Centrality") +
+  labs(fill = "Department", size = "Degree Centrality", 
+       caption = "Co-authorship network of SOCIUM members.\nLabelled highest 5% in degree.") +
   theme_graph(base_family="sans")
 
 ggraph(soc_sub, layout = "fr") +
   geom_edge_link(alpha = .7) +
   geom_node_point(aes(fill = as.factor(dep_cat), size = betweenness),
                   shape = 21) +  
-  geom_node_label(aes(filter = betweenness>=75000, label =  name), 
+  geom_node_label(aes(filter = betweenness>quantile(betweenness, p=.95), label =  name), 
                   vjust = 3, size = 2, alpha = 0.8, label.padding = 0.1, repel = TRUE) +
-  labs(fill = "Department", size = "Betweenness Centrality") +
+  labs(fill = "Department", size = "Betweenness Centrality", 
+       caption = "Co-authorship network of SOCIUM members.\nLabelled highest 5% in betweenness.") +
   theme_graph(base_family="sans")
 
 ggraph(larg_comp_sub, layout = "fr") + # plot only largest component for closeness 
   geom_edge_link() +
-  geom_node_point(aes(fill = as.factor(dep_cat), size = (closeness)^2),
+  geom_node_point(aes(fill = as.factor(dep_cat), size = closeness),
                   shape = 21) +
-  geom_node_label(aes(filter = closeness>0.00026, label =  name), 
+  geom_node_label(aes(filter = closeness>quantile(closeness, p=.95), label =  name), 
                   vjust = 3, size = 2, alpha = 0.8, label.padding = 0.1, repel = TRUE) +
-  labs(fill = "Department", size = "Closeness Centrality\n(squared)") +
+  labs(fill = "Department", size = "Closeness Centrality", 
+       caption = "Co-authorship network of SOCIUM members.\nLabelled highest 5% in closeness.") +
   theme_graph(base_family="sans")
 
 ggraph(soc_sub, layout = "fr") +
   geom_edge_link(alpha = .7) +
   geom_node_point(aes(fill = as.factor(dep_cat), size = eigen),
                   shape = 21) +
-  geom_node_label(aes(filter = eigen>=0.1, label =  name), 
+  geom_node_label(aes(filter = eigen>quantile(eigen, p=.99), label =  name), 
                  vjust = 3, size = 2, alpha = 0.8, label.padding = 0.1, repel = TRUE) +
-  labs(fill = "Department", size = "Eigenvector Centrality") +
+  labs(fill = "Department", size = "Eigenvector Centrality", 
+       caption = "Co-authorship network of SOCIUM members.\nLabelled highest 1% in eigenvector.") +
   theme_graph(base_family="sans")
 ```
 
