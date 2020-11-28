@@ -7,7 +7,9 @@ Presentation, code, and data from the meet-up.
 - Basic concepts and measures of network analysis are introduced.
 - A scientific co-authorship network serves as example data (complete data set [here](https://github.com/christine-hvw/coauthr_net-socium)).
 
-<img src="figs/soc_plot-1.png" width="800"/>
+<img src="figs/soc_plot-1.png" width="800"/>  
+
+<img src="images/interact_plot.gif" width="600"/>
 
 ## Helpful Resources   
 
