@@ -10,13 +10,6 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE,
-                      fig.align = "center",
-                      fig.width = 6,
-                      fig.height = 4,
-                      dev = "png",
-                      cache = FALSE,
-                      fig.path = "figs/")
 
 library(here)
 library(tidyverse)
@@ -26,6 +19,14 @@ library(tidygraph)
 library(ggraph)
 library(readxl)
 library(visNetwork)
+
+opts_chunk$set(echo = FALSE,
+           fig.align = "center",
+           fig.width = 6,
+           fig.height = 4,
+           dev = "png",
+           cache = FALSE,
+           fig.path = "figs/")
 
 ```
 
@@ -76,12 +77,12 @@ We can now plot this object with `ggraph`, which basically works like `ggplot2` 
 
 ```{r ud_uw_na, fig.cap="Undirected, unweighted graph without attributes", echo=TRUE, out.extra='style="width:50%;"'}
 
-pal <- viridis::viridis(n = 6, begin = .3, end = .75) # define color palette for plotting
+pal <- Manu::get_pal("Kereru") # define color palette for plotting (https://github.com/G-Thomson/Manu)
 
 # undirected, unweighted, no attributes  
 ggraph(undir_net, layout = "kk") + 
   geom_edge_link() + 
-  geom_node_point(size = 10, colour = pal[1]) +
+  geom_node_point(size = 10, color = pal[1]) +
   geom_node_text(aes(label = id), 
                  colour = "white", vjust = 0.4) + 
   theme_graph() # theme without axes, gridlines etc.
@@ -132,7 +133,7 @@ ggraph(undir_net.att, layout = "kk") +
                  alpha = 0.7) + 
   geom_node_point(aes(colour = Preference),
                   size = 10) +
-  scale_color_manual(values = pal[c(6,1)]) +
+  scale_color_manual(values = pal[c(1,2)]) +
   geom_node_text(aes(label = id), 
                  colour = "white", vjust = 0.4) + 
   theme_graph(base_family="sans") # provide font family, otherwise can't render document (Windows)
@@ -150,7 +151,7 @@ ggraph(bipart_net, layout = "stress") +
   geom_edge_link() +
   geom_node_point(aes(shape = Node.type , color = Node.type), 
                   size = 6) + 
-  scale_color_manual(values = pal[c(1,6)]) +
+  scale_color_manual(values = pal[c(1,2)]) +
   theme_graph(base_family="sans") # provide font family, otherwise can't render document (Windows)
 
 ```
@@ -367,6 +368,7 @@ ggraph(soc_sub, layout = "fr") +
   geom_node_point(aes(fill = as.factor(dep_cat)), 
                   shape = 21, size = 2) +
   labs(fill = "Department", caption = "Co-authorship network of SOCIUM members.") +
+  scale_fill_manual(values = pal)+
   theme_graph(base_family="sans")
 
 ggraph(soc_sub, layout = "fr") +
@@ -377,6 +379,7 @@ ggraph(soc_sub, layout = "fr") +
                   vjust = 3, size = 2, alpha = 0.8, label.padding = 0.1, repel = TRUE) +
   labs(fill = "Department", size = "Degree Centrality", 
        caption = "Co-authorship network of SOCIUM members.\nLabelled highest 5% in degree.") +
+  scale_fill_manual(values = pal)+
   theme_graph(base_family="sans")
 
 ggraph(soc_sub, layout = "fr") +
@@ -387,6 +390,7 @@ ggraph(soc_sub, layout = "fr") +
                   vjust = 3, size = 2, alpha = 0.8, label.padding = 0.1, repel = TRUE) +
   labs(fill = "Department", size = "Betweenness Centrality", 
        caption = "Co-authorship network of SOCIUM members.\nLabelled highest 5% in betweenness.") +
+  scale_fill_manual(values = pal)+
   theme_graph(base_family="sans")
 
 ggraph(larg_comp_sub, layout = "fr") + # plot only largest component for closeness 
@@ -397,6 +401,7 @@ ggraph(larg_comp_sub, layout = "fr") + # plot only largest component for closene
                   vjust = 3, size = 2, alpha = 0.8, label.padding = 0.1, repel = TRUE) +
   labs(fill = "Department", size = "Closeness Centrality", 
        caption = "Co-authorship network of SOCIUM members.\nLabelled highest 5% in closeness.") +
+  scale_fill_manual(values = pal)+
   theme_graph(base_family="sans")
 
 ggraph(soc_sub, layout = "fr") +
@@ -407,10 +412,15 @@ ggraph(soc_sub, layout = "fr") +
                  vjust = 3, size = 2, alpha = 0.8, label.padding = 0.1, repel = TRUE) +
   labs(fill = "Department", size = "Eigenvector Centrality", 
        caption = "Co-authorship network of SOCIUM members.\nLabelled highest 1% in eigenvector.") +
+  scale_fill_manual(values = pal)+
   theme_graph(base_family="sans")
 ```
 
 ## Interactive Plotting with `visNetwork`      
+
+Interactive plotting is a great way to explore network data in more detail, especially for larger networks. The `visNetwork` package offers nice customization possibilities, and the result is zoom-, click-, and drag-able. Give it a try!    
+
+One downside is that it the network object has to be split into a node and edge data frame and their variables have to be given specific names, like "id", "label", or "group" if you want to use them for plotting. See [here](https://cran.r-project.org/web/packages/visNetwork/vignettes/Introduction-to-visNetwork.html) or [here](http://datastorm-open.github.io/visNetwork/) for more documentation.    
 
 ```{r visnetwork, echo=TRUE,  out.width="80%"}
 node_df <- soc_sub %N>% 
@@ -423,18 +433,20 @@ edge_df <- soc_sub %E>%
   filter(!edge_is_loop()) %>% # remove loops
   as.data.frame() 
 
-visNetwork(node_df, edge_df, width = "100%", height = "600px") %>% 
+(interact_plot <- 
+visNetwork(node_df, edge_df, width = "100%", height = "600px", 
+           main = "Interactive plot of SOCIUM co-authorship network",
+           footer = "Nodes sized according to degree centrality.") %>% 
   visNodes(shadow = TRUE, font = list(size = 30)) %>% 
-  visGroups(groupname = "Theory", color = pal[1]) %>% # have to specify groups individually
-  visGroups(groupname = "Polit. Economy", color = pal[3]) %>% 
-  visGroups(groupname = "Ineq. in Welfare Societies", color = pal[4]) %>% 
-  visGroups(groupname = "Life Course", color = pal[5]) %>% 
-  visGroups(groupname = "Health", color = pal[6]) %>% 
+  visGroups(groupname = "Theory", color = pal[5]) %>% # have to specify groups individually
+  visGroups(groupname = "Polit. Economy", color = pal[4]) %>% 
+  visGroups(groupname = "Ineq. in Welfare Societies", color = pal[2]) %>% 
+  visGroups(groupname = "Life Course", color = pal[3]) %>% 
+  visGroups(groupname = "Health", color = pal[1]) %>% 
   visIgraphLayout(layout = "layout_with_fr") %>% 
-  visLegend(main="Department", position="right", ncol=1) %>% 
-  visOptions(selectedBy = "group")
+  visLegend(main="Department", position="right", ncol=1, zoom = FALSE) %>% # can also be manually created
+  visOptions(selectedBy = "group"))
 ```
-
 
 # Resources   
 
