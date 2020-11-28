@@ -7,6 +7,8 @@ Presentation, code, and data from the meet-up.
 - Basic concepts and measures of network analysis are introduced.
 - A scientific co-authorship network serves as example data (complete data set [here](https://github.com/christine-hvw/coauthr_net-socium)).
 
+![](figs/soc_plot-1.png){width=80%}
+
 ## Helpful Resources   
 
 - Great intro using different packages, good example of how to create/manipulate node and edge sets:    
