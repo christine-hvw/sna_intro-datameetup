@@ -1,7 +1,11 @@
 # Intro to (Social) Network Analysis in *R* 
 ## CorrelAidXBremen Data Meet-up 04/11/2020  
 
-Presentation, code, and data from the meet-up. 
+Presentation, code, and data from the meet-up.  
+
+- Focus is on doing network analysis the "tidy" way, using the [tidygraph](https://github.com/thomasp85/tidygraph) and [ggraph](https://github.com/thomasp85/ggraph) packages.
+- Basic concepts and measures of network analysis are introduced.
+- A scientific co-authorship network serves as example data (complete data set [here](https://github.com/christine-hvw/coauthr_net-socium)).
 
 ## Helpful Resources   
 
