@@ -9,7 +9,9 @@ Presentation, code, and data from the meet-up.
 
 <img src="figs/soc_plot-1.png" width="800"/>  
 
-<img src="images/interact_plot.gif" width="600"/>
+Interactive plotting with the [visNetwork](https://github.com/datastorm-open/visNetwork) package is also introduced.    
+
+<img src="images/interact_plot.gif" width="600"/>   
 
 ## Helpful Resources   
 
